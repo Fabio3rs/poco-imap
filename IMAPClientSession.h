@@ -88,7 +88,7 @@ class IMAPClientSession {
 
     virtual void capability();
 
-    std::vector<std::string> &getCapability() { return _capability; };
+    std::vector<std::string> &getCapability() { return _capability; }
 
     virtual void copyMessage(const std::string &uid,
                              const std::string &from_folder,
@@ -107,9 +107,6 @@ class IMAPClientSession {
 
     virtual std::vector<std::string>
     searchMessages(const std::string &criteria);
-    virtual std::unique_ptr<FetchedMessage>
-    fetchMessage(const std::string &message_set,
-                 const std::string &message_parts = "(RFC822)");
 
     virtual std::vector<std::unique_ptr<FetchedMessage>>
     fetchMessagesRFC822(const std::string &message_set);
@@ -132,7 +129,7 @@ class IMAPClientSession {
 
     DialogSocket &socket() { return _socket; };
 
-    std::string &folderSeparator() { return _folder_separator; };
+    std::string &folderSeparator() { return _folder_separator; }
 
     template <class T = std::string>
     static void tokenize(const T &str, std::vector<T> &tokens,
@@ -196,7 +193,7 @@ class IMAPClientSession {
             }
             tokens.push_back(token);
         }
-    };
+    }
 
     std::string host() { return _host; }
 

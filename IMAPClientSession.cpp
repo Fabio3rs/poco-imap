@@ -385,7 +385,7 @@ struct FetchResult {
     std::string content;
 };
 
-std::vector<FetchResult>
+static std::vector<FetchResult>
 parseFetchResponse(const std::vector<std::string> &data, size_t start = 0) {
     if (data.size() < 3) {
         throw std::runtime_error(
@@ -447,70 +447,6 @@ parseFetchResponse(const std::vector<std::string> &data, size_t start = 0) {
     return result;
 }
 
-std::unique_ptr<IMAPClientSession::FetchedMessage>
-IMAPClientSession::fetchMessage(const std::string &message_set,
-                                const std::string &message_parts) {
-    /*
-
-"""Fetch (parts of) messages.
-
-(typ, [data, ...]) = <instance>.fetch(message_set, message_parts)
-
-'message_parts' should be a string of selected parts
-enclosed in parentheses, eg: "(UID BODY[TEXT])".
-
-'data' are tuples of message part envelope and data.
-"""
-name = 'FETCH'
-    */
-    std::string response, response1;
-    std::vector<std::string> data, data1;
-
-    if (!sendCommand("FETCH " + message_set + " " + message_parts, response1,
-                     data1)) {
-        throw IMAPException("Cannot fetch messages", response1);
-    }
-
-    // data[0] = * 1 FETCH (RFC822 {size}
-    // data[1] = message body
-    // data[...] = message body
-    // data[N] = )
-
-    auto fetchRes = parseFetchResponse(data1)[0];
-
-    std::unique_ptr<FetchedMessage> result(std::make_unique<FetchedMessage>());
-
-    class MyPartHandler : public Poco::Net::PartHandler {
-      public:
-        void handlePart(const Poco::Net::MessageHeader &header,
-                        std::istream &stream) override {
-            std::ostringstream partData;
-            Poco::StreamCopier::copyStream(stream, partData);
-
-            // Save the file or process the part data as needed
-            FetchedParts part;
-            part.header = header;
-            part.content = partData.str();
-
-            result->parts.emplace_back(std::move(part));
-        }
-
-        FetchedMessage *result{};
-
-        MyPartHandler() = default;
-        MyPartHandler(FetchedMessage *res) : result(res) {}
-    };
-
-    MyPartHandler partHandler(result.get());
-
-    Poco::Net::MailMessage &mailMessage = result->message;
-
-    std::istringstream iss(fetchRes.content);
-    mailMessage.read(iss, partHandler);
-
-    return result;
-}
-
 std::vector<std::unique_ptr<IMAPClientSession::FetchedMessage>>
 IMAPClientSession::fetchMessagesRFC822(const std::string &message_set) {
     std::string response, response1;
@@ -522,32 +458,28 @@ IMAPClientSession::fetchMessagesRFC822(const std::string &message_set) {
 
     auto fetchVec = parseFetchResponse(data1);
 
+    class MyPartHandler : public Poco::Net::PartHandler {
+      public:
+        void handlePart(const Poco::Net::MessageHeader &header,
+                        std::istream &stream) override {
+            FetchedParts part;
+            part.header = header;
+            Poco::StreamCopier::copyToString(stream, part.content);
+
+            result->parts.emplace_back(std::move(part));
+        }
+
+        FetchedMessage *result{};
+
+        MyPartHandler() = default;
+        MyPartHandler(FetchedMessage *res) : result(res) {}
+    };
+
     std::vector<std::unique_ptr<FetchedMessage>> resultVec;
 
     for (const auto &fetchRes : fetchVec) {
         std::unique_ptr<FetchedMessage> result(
             std::make_unique<FetchedMessage>());
-
-        class MyPartHandler : public Poco::Net::PartHandler {
-          public:
-            void handlePart(const Poco::Net::MessageHeader &header,
-                            std::istream &stream) override {
-                std::ostringstream partData;
-                Poco::StreamCopier::copyStream(stream, partData);
-
-                // Save the file or process the part data as needed
-                FetchedParts part;
-                part.header = header;
-                part.content = partData.str();
-
-                result->parts.emplace_back(std::move(part));
-            }
-
-            FetchedMessage *result{};
-
-            MyPartHandler() = default;
-            MyPartHandler(FetchedMessage *res) : result(res) {}
-        };
 
         MyPartHandler partHandler(result.get());
 
