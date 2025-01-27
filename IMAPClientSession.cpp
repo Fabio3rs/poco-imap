@@ -9,26 +9,18 @@
 #include "Poco/Net/QuotedPrintableDecoder.h"
 #include "Poco/String.h"
 #include "Poco/StringTokenizer.h"
+#include "stringviewstream.hpp"
 
 #include <algorithm>
 #include <cstddef>
 #include <iostream>
+#include <istream>
 #include <iterator>
 #include <memory>
 #include <regex>
 #include <sstream>
 #include <utility>
 #include <vector>
-
-using Poco::Base64Decoder;
-using Poco::DateTimeFormatter;
-using Poco::NumberFormatter;
-using Poco::StreamCopier;
-using Poco::StringTokenizer;
-using Poco::Net::MessageHeader;
-
-using Poco::toUpper;
-using Poco::trim;
 
 namespace Poco {
 namespace Net {
@@ -485,8 +477,9 @@ IMAPClientSession::fetchMessagesRFC822(const std::string &message_set) {
 
         Poco::Net::MailMessage &mailMessage = result->message;
 
-        std::istringstream iss(fetchRes.content);
-        mailMessage.read(iss, partHandler);
+        stringstream_view iss(fetchRes.content);
+        std::istream is(&iss);
+        mailMessage.read(is, partHandler);
 
         resultVec.emplace_back(std::move(result));
     }
@@ -541,7 +534,8 @@ void IMAPClientSession::getMessages(const std::string &folder,
             if (cmd == "RFC822.SIZE")
                 m.size = atoi(tokens2[++i].c_str());
             else if (cmd == "BODYSTRUCTURE") {
-                std::istringstream body(tokens2[i + 1]);
+                stringstream_view bodyStream(tokens2[i + 1]);
+                std::istream body(&bodyStream);
                 m.parts = parseBodyStructure(body);
             } else if (cmd == "INTERNALDATE")
                 m.date = tokens2[++i];
@@ -599,7 +593,7 @@ void IMAPClientSession::getMessages(const std::string &folder,
 }
 
 IMAPClientSession::PartInfo
-IMAPClientSession::parseBodyStructure(std::istringstream &src) {
+IMAPClientSession::parseBodyStructure(std::istream &src) {
     char c;
     PartInfo mi;
     bool inside = false;

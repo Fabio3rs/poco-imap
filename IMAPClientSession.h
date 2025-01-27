@@ -74,7 +74,7 @@ class IMAPClientSession {
 
     virtual bool checkCapability(const std::string &cap);
 
-    ~IMAPClientSession();
+    virtual ~IMAPClientSession();
 
     void setTimeout(const Poco::Timespan &timeout);
 
@@ -127,7 +127,7 @@ class IMAPClientSession {
     virtual bool sendCommand(const std::string &command, std::string &response,
                              std::vector<std::string> &data);
 
-    DialogSocket &socket() { return _socket; };
+    DialogSocket &socket() { return _socket; }
 
     std::string &folderSeparator() { return _folder_separator; }
 
@@ -201,7 +201,7 @@ class IMAPClientSession {
     void moveMessage_without_MOVE(const std::string &uid,
                                   const std::string &from_folder,
                                   const std::string &to_folder);
-    PartInfo parseBodyStructure(std::istringstream &src);
+    PartInfo parseBodyStructure(std::istream &src);
 
     DialogSocket _socket;
     bool _isOpen;
