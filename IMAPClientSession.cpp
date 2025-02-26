@@ -12,6 +12,7 @@
 #include "stringviewstream.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <iostream>
 #include <istream>
@@ -129,6 +130,82 @@ void IMAPClientSession::noop() {
     if (!sendCommand("NOOP", response, data))
         throw IMAPException("The IMAP conection has been desconected",
                             response);
+}
+
+bool IMAPClientSession::idleImpl(
+    const std::function<bool(const std::string &)> &callback) {
+    // Gera uma tag para o comando
+    bool exitIdle = false;
+
+    std::string tag;
+    NumberFormatter::append0(tag, _tag++, 10);
+
+    // Envia o comando IDLE
+    std::string command = tag + " IDLE";
+    _socket.sendMessage(command);
+
+    // Aguarda a resposta de continuação do servidor (geralmente algo como "+
+    // idling")
+    std::string response;
+    _socket.receiveMessage(response);
+    std::cout << "IDLE response: " << response << std::endl;
+    if (response.empty() || response[0] != '+') {
+        throw IMAPException("IDLE não aceito pelo servidor", response);
+    }
+
+    std::chrono::minutes timeout(28);
+    std::chrono::steady_clock::time_point start =
+        std::chrono::steady_clock::now();
+    _socket.setReceiveTimeout(
+        Poco::Timespan(std::chrono::seconds(timeout).count() / 2, 0));
+    _socket.setKeepAlive(true);
+
+    // Agora, o servidor está em modo IDLE e pode enviar notificações não
+    // solicitadas.
+    while (!exitIdle && (std::chrono::steady_clock::now() - start) < timeout) {
+        std::string notification;
+        try {
+            // Bloqueia até receber uma mensagem do servidor.
+            if (_socket.receiveMessage(notification)) {
+                return true;
+            }
+        } catch (const Poco::TimeoutException &e) {
+            std::cerr << "Timeout ao aguardar notificação do servidor: "
+                      << e.displayText() << std::endl;
+            break;
+        }
+
+        // Se receber uma notificação não vazia, chama o callback.
+        if (!notification.empty()) {
+            // Se o callback retornar true, encerra o loop.
+            try {
+                exitIdle = callback(notification);
+            } catch (const std::exception &e) {
+                std::cerr << "Erro ao processar notificação: " << e.what()
+                          << std::endl;
+            }
+        }
+    }
+
+    // Envia o comando para sair do IDLE.
+    _socket.sendMessage("DONE");
+
+    // Aguarda a resposta final do servidor para o comando IDLE.
+    std::string idleEndResponse;
+    _socket.receiveMessage(idleEndResponse);
+    std::cout << "IDLE end response: " << idleEndResponse << std::endl;
+    if (idleEndResponse.find("OK") == std::string::npos)
+        throw IMAPException("Falha ao encerrar o modo IDLE", idleEndResponse);
+
+    return exitIdle;
+}
+
+void IMAPClientSession::idle(
+    const std::function<bool(const std::string &)> &callback) {
+    bool exitIdle = false;
+    while (!exitIdle) {
+        exitIdle = idleImpl(callback);
+    }
 }
 
 void IMAPClientSession::unsubscribe(const std::string &folder) {

@@ -12,6 +12,7 @@
 
 #include <Poco/Net/MailMessage.h>
 #include <cstddef>
+#include <functional>
 #include <istream>
 #include <memory>
 #include <vector>
@@ -85,6 +86,8 @@ class IMAPClientSession {
 
     void close();
     void noop();
+
+    void idle(const std::function<bool(const std::string &)> &callback);
 
     virtual void capability();
 
@@ -198,6 +201,8 @@ class IMAPClientSession {
     std::string host() { return _host; }
 
   private:
+    bool idleImpl(const std::function<bool(const std::string &)> &callback);
+
     void moveMessage_without_MOVE(const std::string &uid,
                                   const std::string &from_folder,
                                   const std::string &to_folder);
