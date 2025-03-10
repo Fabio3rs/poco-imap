@@ -166,8 +166,8 @@ bool IMAPClientSession::idleImpl(
         std::string notification;
         try {
             // Bloqueia até receber uma mensagem do servidor.
-            if (_socket.receiveMessage(notification)) {
-                return true;
+            if (!_socket.receiveMessage(notification)) {
+                break;
             }
         } catch (const Poco::TimeoutException &e) {
             std::cerr << "Timeout ao aguardar notificação do servidor: "
