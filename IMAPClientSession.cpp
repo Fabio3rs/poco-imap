@@ -148,7 +148,6 @@ bool IMAPClientSession::idleImpl(
     // idling")
     std::string response;
     _socket.receiveMessage(response);
-    std::cout << "IDLE response: " << response << std::endl;
     if (response.empty() || response[0] != '+') {
         throw IMAPException("IDLE não aceito pelo servidor", response);
     }
@@ -159,6 +158,10 @@ bool IMAPClientSession::idleImpl(
     _socket.setReceiveTimeout(
         Poco::Timespan(std::chrono::seconds(timeout).count() / 2, 0));
     _socket.setKeepAlive(true);
+    // set the keep alive on sockopt to each 30 seconds
+    _socket.setOption(IPPROTO_TCP, TCP_KEEPIDLE, 30);
+    _socket.setOption(IPPROTO_TCP, TCP_KEEPINTVL, 30);
+    _socket.setOption(IPPROTO_TCP, TCP_KEEPCNT, 10);
 
     // Agora, o servidor está em modo IDLE e pode enviar notificações não
     // solicitadas.
@@ -172,7 +175,7 @@ bool IMAPClientSession::idleImpl(
         } catch (const Poco::TimeoutException &e) {
             std::cerr << "Timeout ao aguardar notificação do servidor: "
                       << e.displayText() << std::endl;
-            break;
+            continue;
         }
 
         // Se receber uma notificação não vazia, chama o callback.
@@ -545,6 +548,7 @@ IMAPClientSession::fetchMessagesRFC822(const std::string &message_set) {
     };
 
     std::vector<std::unique_ptr<FetchedMessage>> resultVec;
+    resultVec.reserve(fetchVec.size());
 
     for (const auto &fetchRes : fetchVec) {
         std::unique_ptr<FetchedMessage> result(
